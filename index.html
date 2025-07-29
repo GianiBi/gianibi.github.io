@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commission Board</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.22.10/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const CommissionBoard = () => {
+      const [commissions, setCommissions] = useState({
+        New: [],
+        'In Progress': [],
+        Completed: []
+      });
+      const [newCommission, setNewCommission] = useState({
+        description: '',
+        client: '',
+        date: '',
+        amount: '',
+        source: ''
+      });
+      const [showForm, setShowForm] = useState(false);
+      const [editing, setEditing] = useState(null);
+
+      // Load commissions from localStorage on mount
+      useEffect(() => {
+        const saved = localStorage.getItem('commissions');
+        if (saved) {
+          setCommissions(JSON.parse(saved));
+        }
+      }, []);
+
+      // Save commissions to localStorage on update
+      useEffect(() => {
+        localStorage.setItem('commissions', JSON.stringify(commissions));
+      }, [commissions]);
+
+      const handleInputChange = (e) => {
+        setNewCommission({ ...newCommission, [e.target.name]: e.target.value });
+      };
+
+      const handleAddCommission = () => {
+        if (!newCommission.description || !newCommission.client) return;
+        const id = Date.now();
+        const updatedCommissions = {
+          ...commissions,
+          New: [...commissions.New, { ...newCommission, id }]
+        };
+        setCommissions(updatedCommissions);
+        setNewCommission({ description: '', client: '', date: '', amount: '', source: '' });
+        setShowForm(false);
+      };
+
+      const handleEditCommission = (id, column) => {
+        const commission = commissions[column].find(c => c.id === id);
+        setEditing({ id, column });
+        setNewCommission(commission);
+        setShowForm(true);
+      };
+
+      const handleUpdateCommission = () => {
+        const updatedCommissions = {
+          ...commissions,
+          [editing.column]: commissions[editing.column].filter(c => c.id !== editing.id)
+        };
+        updatedCommissions.New = [...updatedCommissions.New, { ...newCommission, id: editing.id }];
+        setCommissions(updatedCommissions);
+        setNewCommission({ description: '', client: '', date: '', amount: '', source: '' });
+        setEditing(null);
+        setShowForm(false);
+      };
+
+      const handleDeleteCommission = (id, column) => {
+        const updatedCommissions = {
+          ...commissions,
+          [column]: commissions[column].filter(c => c.id !== id)
+        };
+        setCommissions(updatedCommissions);
+      };
+
+      const handleDragStart = (e, id, column) => {
+        e.dataTransfer.setData('id', id);
+        e.dataTransfer.setData('sourceColumn', column);
+      };
+
+      const handleDrop = (e, targetColumn) => {
+        const id = parseInt(e.dataTransfer.getData('id'));
+        const sourceColumn = e.dataTransfer.getData('sourceColumn');
+        if (sourceColumn === targetColumn) return;
+
+        const commission = commissions[sourceColumn].find(c => c.id === id);
+        const updatedCommissions = {
+          ...commissions,
+          [sourceColumn]: commissions[sourceColumn].filter(c => c.id !== id),
+          [targetColumn]: [...commissions[targetColumn], commission]
+        };
+        setCommissions(updatedCommissions);
+      };
+
+      const allowDrop = (e) => {
+        e.preventDefault();
+      };
+
+      return (
+        <div className="p-4 bg-gray-100 min-h-screen">
+          <h1 className="text-3xl font-bold text-center mb-6">Commission Board</h1>
+          <button
+            className="mb-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            onClick={() => setShowForm(!showForm)}
+          >
+            {showForm ? 'Cancel' : 'Add Commission'}
+          </button>
+
+          {showForm && (
+            <div className="mb-6 p-4 bg-white rounded shadow">
+              <input
+                type="text"
+                name="description"
+                value={newCommission.description}
+                onChange={handleInputChange}
+                placeholder="Description"
+                className="mb-2 p-2 border rounded w-full"
+              />
+              <input
+                type="text"
+                name="client"
+                value={newCommission.client}
+                onChange={handleInputChange}
+                placeholder="Client"
+                className="mb-2 p-2 border rounded w-full"
+              />
+              <input
+                type="date"
+                name="date"
+                value={newCommission.date}
+                onChange={handleInputChange}
+                className="mb-2 p-2 border rounded w-full"
+              />
+              <input
+                type="number"
+                name="amount"
+                value={newCommission.amount}
+                onChange={handleInputChange}
+                placeholder="Amount ($)"
+                className="mb-2 p-2 border rounded w-full"
+              />
+              <input
+                type="text"
+                name="source"
+                value={newCommission.source}
+                onChange={handleInputChange}
+                placeholder="Source (e.g., VGen, Discord)"
+                className="mb-2 p-2 border rounded w-full"
+              />
+              <button
+                className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                onClick={editing ? handleUpdateCommission : handleAddCommission}
+              >
+                {editing ? 'Update Commission' : 'Add Commission'}
+              </button>
+            </div>
+          )}
+
+          <div className="flex space-x-4">
+            {['New', 'In Progress', 'Completed'].map(column => (
+              <div
+                key={column}
+                className="w-1/3 p-4 bg-white rounded shadow"
+                onDragOver={allowDrop}
+                onDrop={(e) => handleDrop(e, column)}
+              >
+                <h2 className="text-xl font-semibold mb-4">{column}</h2>
+                {commissions[column].map(commission => (
+                  <div
+                    key={commission.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, commission.id, column)}
+                    className="mb-2 p-3 bg-gray-50 border rounded hover:bg-gray-100"
+                  >
+                    <p><strong>Description:</strong> {commission.description}</p>
+                    <p><strong>Client:</strong> {commission.client}</p>
+                    <p><strong>Date:</strong> {commission.date || 'N/A'}</p>
+                    <p><strong>Amount:</strong> ${commission.amount || 'N/A'}</p>
+                    <p><strong>Source:</strong> {commission.source || 'N/A'}</p>
+                    <div className="mt-2">
+                      <button
+                        className="text-blue-500 mr-2"
+                        onClick={() => handleEditCommission(commission.id, column)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="text-red-500"
+                        onClick={() => handleDeleteCommission(commission.id, column)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<CommissionBoard />);
+  </script>
+</body>
+</html>
